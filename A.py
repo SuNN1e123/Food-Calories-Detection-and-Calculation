@@ -8,6 +8,10 @@ import io
 from datetime import datetime
 import tensorflow as tf
 
+# Debugging: Check Python executable
+import sys
+st.write("Python executable:", sys.executable)
+
 # Mock food recognition model (replace with your actual model)
 class FoodDetector:
     def __init__(self):
@@ -18,8 +22,6 @@ class FoodDetector:
     
     def load_model(self):
         """Load the TFLite model"""
-        # In a real app, you would load your actual model here
-        # For demo purposes, we'll use a placeholder
         interpreter = tf.lite.Interpreter(model_path="model.tflite")
         interpreter.allocate_tensors()
         return interpreter
@@ -50,7 +52,6 @@ class FoodDetector:
     def detect_food(self, image):
         """Detect food from image using the model"""
         try:
-            # Get model input details
             input_details = self.model.get_input_details()
             output_details = self.model.get_output_details()
             input_shape = input_details[0]['shape'][1:3]
@@ -70,7 +71,6 @@ class FoodDetector:
             tag = self.labels[max_index]
             probability = outputs[0][max_index]
             
-            # Apply confidence threshold
             if probability < 0.5:  # 50% confidence threshold
                 return None, 0.0
                 
@@ -99,7 +99,6 @@ col1, col2 = st.columns([1, 1], gap="large")
 with col1:
     st.header("Food Detection")
     
-    # Image upload/capture options
     capture_option = st.radio(
         "How would you like to provide the food image?",
         ("Upload an image", "Capture from Raspberry Pi Pico")
@@ -124,20 +123,15 @@ with col1:
     
     else:  # Raspberry Pi Pico capture
         st.markdown("### Raspberry Pi Pico Capture")
-        
-        # This would be replaced with actual Raspberry Pi Pico integration
         st.info("""
         **Note:** In a real implementation, this section would connect to your Raspberry Pi Pico 
-        to capture images directly. For this demo, you can upload an image above.
+        to capture images directly.
         """)
         
-        # Mock capture button
         if st.button("Capture Image from Pico"):
-            # In a real app, this would trigger the Pico to capture an image
-            # For demo, we'll use a placeholder
             st.warning("Raspberry Pi Pico integration not implemented in this demo")
             st.session_state.detected_food = "Apple"  # Demo value
-            st.session_state.food_image = Image.open("demo_food.jpg")  # Would be the captured image
+            st.session_state.food_image = Image.open("demo_food.jpg")  # Placeholder
             st.image(st.session_state.food_image, caption="Captured Food Image", use_column_width=True)
             st.success(f"Detected: Apple (Confidence: 95%)")  # Demo detection
 
@@ -146,7 +140,6 @@ with col2:
     if 'detected_food' in st.session_state:
         st.header("Nutritional Information")
         
-        # Display detected food
         st.subheader("Detected Food")
         col_img, col_info = st.columns([1, 2])
         with col_img:
@@ -159,7 +152,6 @@ with col2:
             else:
                 st.warning("⚠️ Not recommended for frequent consumption")
         
-        # Portion input
         st.subheader("Portion Details")
         portion_option = st.selectbox(
             "Select portion size:",
@@ -173,18 +165,15 @@ with col2:
             weight = 50
         elif portion_option == "Medium (100g)":
             weight = 100
-        else:  # Large
+        else:
             weight = 150
         
-        # Calculate calories
         if st.button("Calculate Nutrition"):
             food_data = detector.food_db.get(st.session_state.detected_food)
             if food_data:
                 calories = (food_data['calories'] * weight) / 100
                 
-                # Display results
                 st.subheader("Nutritional Information")
-                
                 cols = st.columns(2)
                 cols[0].metric("Food", st.session_state.detected_food)
                 cols[1].metric("Weight", f"{weight}g")
@@ -193,7 +182,6 @@ with col2:
                 cols[0].metric("Calories", f"{calories:.1f} kcal")
                 cols[1].metric("Calories per 100g", f"{food_data['calories']} kcal")
                 
-                # Health indicator
                 if food_data['healthy']:
                     st.success("This is a healthy food choice!")
                 else:
