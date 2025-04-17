@@ -1,41 +1,40 @@
 import streamlit as st
+import cv2
 import numpy as np
 from PIL import Image
 import requests
 import time
 import io
 from datetime import datetime
+import tensorflow as tf
 
-# Check for required packages and provide installation instructions if missing
-try:
-    import cv2
-except ImportError:
-    st.error("""
-    **OpenCV (cv2) is not installed.**  
-    Please install it by running:  
-    `pip install opencv-python-headless`
-    """)
-    st.stop()
-
-try:
-    import tensorflow as tf
-except ImportError:
-    st.error("""
-    **TensorFlow is not installed.**  
-    Please install it by running:  
-    `pip install tensorflow`
-    """)
-    st.stop()
-
-# Mock food recognition model (simplified version)
+# Mock food recognition model (replace with your actual model)
 class FoodDetector:
     def __init__(self):
-        self.labels = [
+        # Load model and labels
+        self.model = self.load_model()
+        self.labels = self.load_labels()
+        self.food_db = self.load_food_database()
+    
+    def load_model(self):
+        """Load the TFLite model"""
+        # In a real app, you would load your actual model here
+        # For demo purposes, we'll use a placeholder
+        interpreter = tf.lite.Interpreter(model_path="model.tflite")
+        interpreter.allocate_tensors()
+        return interpreter
+    
+    def load_labels(self):
+        """Load food labels from file"""
+        return [
             "Apple", "Banana", "Burger", "Chocolate", 
             "Chocolate Donut", "French Fries", "Fruit Oatmeal",
             "Pear", "Potato Chips", "Rice"
         ]
-        self.food_db = {
+    
+    def load_food_database(self):
+        """Load food calorie database"""
+        return {
             "Apple": {"calories": 52, "healthy": True},
             "Banana": {"calories": 89, "healthy": True},
             "Burger": {"calories": 313, "healthy": False},
@@ -49,12 +48,37 @@ class FoodDetector:
         }
     
     def detect_food(self, image):
-        """Mock detection function - replace with your actual model"""
-        # In a real app, you would use your TensorFlow model here
-        # For demo purposes, we'll return a random food item
-        import random
-        food = random.choice(self.labels)
-        return food, random.uniform(0.7, 0.99)  # Random confidence
+        """Detect food from image using the model"""
+        try:
+            # Get model input details
+            input_details = self.model.get_input_details()
+            output_details = self.model.get_output_details()
+            input_shape = input_details[0]['shape'][1:3]
+            
+            # Preprocess image
+            image = image.resize(input_shape)
+            input_array = np.array(image, dtype=np.float32)[np.newaxis, :, :, :]
+            input_array = input_array[:, :, :, (2, 1, 0)]  # Convert to BGR
+            
+            # Run inference
+            self.model.set_tensor(input_details[0]['index'], input_array)
+            self.model.invoke()
+            
+            # Get results
+            outputs = self.model.get_tensor(output_details[0]['index'])
+            max_index = np.argmax(outputs[0])
+            tag = self.labels[max_index]
+            probability = outputs[0][max_index]
+            
+            # Apply confidence threshold
+            if probability < 0.5:  # 50% confidence threshold
+                return None, 0.0
+                
+            return tag, probability
+            
+        except Exception as e:
+            st.error(f"Detection error: {str(e)}")
+            return None, 0.0
 
 # Initialize the detector
 detector = FoodDetector()
@@ -75,27 +99,47 @@ col1, col2 = st.columns([1, 1], gap="large")
 with col1:
     st.header("Food Detection")
     
-    # Image upload option (simplified)
-    uploaded_file = st.file_uploader("Upload a food image...", type=["jpg", "jpeg", "png"])
+    # Image upload/capture options
+    capture_option = st.radio(
+        "How would you like to provide the food image?",
+        ("Upload an image", "Capture from Raspberry Pi Pico")
+    )
     
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Food Image", use_column_width=True)
+    if capture_option == "Upload an image":
+        uploaded_file = st.file_uploader("Choose a food image...", type=["jpg", "jpeg", "png"])
+        if uploaded_file is not None:
+            image = Image.open(uploaded_file)
+            st.image(image, caption="Uploaded Food Image", use_column_width=True)
+            
+            if st.button("Detect Food"):
+                with st.spinner("Detecting food..."):
+                    detected_food, confidence = detector.detect_food(image)
+                    
+                    if detected_food:
+                        st.success(f"Detected: {detected_food} (Confidence: {confidence:.1%})")
+                        st.session_state.detected_food = detected_food
+                        st.session_state.food_image = image
+                    else:
+                        st.warning("No food item detected with sufficient confidence")
+    
+    else:  # Raspberry Pi Pico capture
+        st.markdown("### Raspberry Pi Pico Capture")
         
-        if st.button("Detect Food"):
-            with st.spinner("Detecting food..."):
-                # Convert PIL Image to OpenCV format
-                opencv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-                
-                # Detect food (using mock detector)
-                detected_food, confidence = detector.detect_food(opencv_image)
-                
-                if detected_food:
-                    st.success(f"Detected: {detected_food} (Confidence: {confidence:.1%})")
-                    st.session_state.detected_food = detected_food
-                    st.session_state.food_image = image
-                else:
-                    st.warning("No food item detected")
+        # This would be replaced with actual Raspberry Pi Pico integration
+        st.info("""
+        **Note:** In a real implementation, this section would connect to your Raspberry Pi Pico 
+        to capture images directly. For this demo, you can upload an image above.
+        """)
+        
+        # Mock capture button
+        if st.button("Capture Image from Pico"):
+            # In a real app, this would trigger the Pico to capture an image
+            # For demo, we'll use a placeholder
+            st.warning("Raspberry Pi Pico integration not implemented in this demo")
+            st.session_state.detected_food = "Apple"  # Demo value
+            st.session_state.food_image = Image.open("demo_food.jpg")  # Would be the captured image
+            st.image(st.session_state.food_image, caption="Captured Food Image", use_column_width=True)
+            st.success(f"Detected: Apple (Confidence: 95%)")  # Demo detection
 
 # Column 2: Portion Input and Results
 with col2:
@@ -148,6 +192,12 @@ with col2:
                 cols = st.columns(2)
                 cols[0].metric("Calories", f"{calories:.1f} kcal")
                 cols[1].metric("Calories per 100g", f"{food_data['calories']} kcal")
+                
+                # Health indicator
+                if food_data['healthy']:
+                    st.success("This is a healthy food choice!")
+                else:
+                    st.warning("Consider healthier alternatives for frequent consumption")
             else:
                 st.error("Nutritional data not available for this food item")
     else:
@@ -158,7 +208,7 @@ with col2:
 st.markdown("---")
 st.markdown("""
 **How to use:**
-1. Upload an image of your food
+1. Upload or capture an image of your food
 2. The system will detect what food it is
 3. Select the portion size
 4. View the calculated nutritional information
